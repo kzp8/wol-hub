@@ -1,0 +1,90 @@
+services:
+  wol:
+    build: .
+    container_name: wol-w018d7848d30a960df1db10c
+    restart: unless-stopped
+    ports:
+      - '8096:8096'
+    volumes:
+      - '/data/coolify/services/w018d7848d30a960df1db10c/data:/data'
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      PORT: '8096'
+      PYTHONUNBUFFERED: '1'
+      TZ: Europe/Madrid
+      HOST_API_URL: 'http://10.0.0.1:8095'
+      COOLIFY_RESOURCE_UUID: w018d7848d30a960df1db10c
+      COOLIFY_CONTAINER_NAME: wol-w018d7848d30a960df1db10c
+      COOLIFY_FQDN: wol.davidrus.dev
+      COOLIFY_URL: 'https://wol.davidrus.dev'
+      COOLIFY_APP_NAME: 'Wake-on-LAN Hub'
+      COOLIFY_PROJECT_NAME: Tools
+      COOLIFY_ENVIRONMENT_NAME: production
+      COOLIFY_SERVER_IP: host.docker.internal
+      SERVICE_NAME_WOL: wol
+    networks:
+      coolify: null
+      w018d7848d30a960df1db10c: null
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wol.rule=Host(`wol.davidrus.dev`)
+      - traefik.http.routers.wol.entrypoints=https
+      - traefik.http.routers.wol.tls=true
+      - traefik.http.routers.wol.tls.certresolver=letsencrypt
+      - traefik.http.services.wol.loadbalancer.server.port=8096
+      - traefik.docker.network=coolify
+      - coolify.managed=true
+      - coolify.version=4.7.6
+      - coolify.serviceUuid=w018d7848d30a960df1db10c
+      - coolify.type=service
+      - coolify.name=wol-w018d7848d30a960df1db10c
+      - coolify.resourceName=wake-on-lan-hub
+      - coolify.projectName=tools
+      - coolify.serviceName=wake-on-lan-hub
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - coolify.service.subUuid=wa018d7848d30a960df1db11
+      - coolify.service.subType=application
+      - coolify.service.subName=wake-on-lan-hub
+      - traefik.enable=true
+      - traefik.http.middlewares.gzip-sse.compress.excludedcontenttypes=text/event-stream
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-0-w018d7848d30a960df1db10c-wol-c409.entryPoints=http
+      - traefik.http.routers.http-0-w018d7848d30a960df1db10c-wol-c409.middlewares=redirect-to-https
+      - 'traefik.http.routers.http-0-w018d7848d30a960df1db10c-wol-c409.rule=Host(`wol.davidrus.dev`) && PathPrefix(`/`)'
+      - traefik.http.routers.http-0-w018d7848d30a960df1db10c-wol-c409.service=http-0-w018d7848d30a960df1db10c-wol-c409
+      - traefik.http.routers.https-0-w018d7848d30a960df1db10c-wol-c409.entryPoints=https
+      - traefik.http.routers.https-0-w018d7848d30a960df1db10c-wol-c409.middlewares=gzip-sse
+      - 'traefik.http.routers.https-0-w018d7848d30a960df1db10c-wol-c409.rule=Host(`wol.davidrus.dev`) && PathPrefix(`/`)'
+      - traefik.http.routers.https-0-w018d7848d30a960df1db10c-wol-c409.service=https-0-w018d7848d30a960df1db10c-wol-c409
+      - traefik.http.routers.https-0-w018d7848d30a960df1db10c-wol-c409.tls.certresolver=letsencrypt
+      - traefik.http.routers.https-0-w018d7848d30a960df1db10c-wol-c409.tls=true
+      - traefik.http.services.http-0-w018d7848d30a960df1db10c-wol-c409.loadbalancer.server.port=8096
+      - traefik.http.services.https-0-w018d7848d30a960df1db10c-wol-c409.loadbalancer.server.port=8096
+      - 'caddy_0.encode=zstd gzip'
+      - caddy_0.handle_path.0_reverse_proxy.stream_close_delay=24h
+      - 'caddy_0.handle_path.0_reverse_proxy={{upstreams 8096}}'
+      - 'caddy_0.handle_path=/*'
+      - caddy_0.header=-Server
+      - 'caddy_0.try_files={path} /index.html /index.php'
+      - 'caddy_0=https://wol.davidrus.dev'
+      - caddy_ingress_network=w018d7848d30a960df1db10c
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - '-c'
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8096/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    env_file:
+      - .env
+networks:
+  coolify:
+    external: true
+  w018d7848d30a960df1db10c:
+    name: w018d7848d30a960df1db10c
+    external: true
