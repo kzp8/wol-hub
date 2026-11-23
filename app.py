@@ -18,10 +18,12 @@ DEVICES = {
     "pc": {
         "id": "pc",
         "name": "PC David (AORUS 15P XD)",
-        "mac": "D8:5E:D3:82:1E:64",
-        "ip": "192.168.68.58",
+        "mac": "00:E0:4C:68:06:9C",
+        "extra_macs": ["D8:5E:D3:82:1E:64"],
+        "ip": "192.168.68.60",
+        "fallback_ip": "192.168.68.58",
         "port_check": 58291,
-        "desc": "Laptop Gaming & Workstation principal",
+        "desc": "Laptop Gaming & Workstation (Thunderbolt & Nativo)",
         "icon": "💻"
     },
     "pve": {
@@ -54,34 +56,37 @@ def add_log(msg, level="info"):
         if len(EVENT_LOG) > 50:
             EVENT_LOG.pop()
 
-def check_device(ip, tcp_port=None):
-    if tcp_port:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.35)
-            t0 = time.time()
-            if s.connect_ex((ip, tcp_port)) == 0:
+def check_device(ip, tcp_port=None, fallback_ip=None):
+    for target in [ip, fallback_ip]:
+        if not target:
+            continue
+        if tcp_port:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.35)
+                t0 = time.time()
+                if s.connect_ex((target, tcp_port)) == 0:
+                    s.close()
+                    return True, int((time.time() - t0) * 1000)
                 s.close()
+            except:
+                pass
+
+        try:
+            t0 = time.time()
+            ret = subprocess.run(["ping", "-c", "1", "-W", "1", target],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if ret.returncode == 0:
                 return True, int((time.time() - t0) * 1000)
-            s.close()
         except:
             pass
-
-    try:
-        t0 = time.time()
-        ret = subprocess.run(["ping", "-c", "1", "-W", "1", ip],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if ret.returncode == 0:
-            return True, int((time.time() - t0) * 1000)
-    except:
-        pass
 
     return False, None
 
 def monitor_loop():
     while True:
         for dev_id, dev in DEVICES.items():
-            online, lat = check_device(dev["ip"], dev.get("port_check"))
+            online, lat = check_device(dev["ip"], dev.get("port_check"), dev.get("fallback_ip"))
             DEVICE_STATUS[dev_id]["online"] = online
             DEVICE_STATUS[dev_id]["latency_ms"] = lat
             if online:
@@ -454,12 +459,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             <div class="details-grid">
                 <div class="detail-item">
-                    <span class="detail-label">Dirección MAC</span>
-                    <span class="detail-val">D8:5E:D3:82:1E:64</span>
+                    <span class="detail-label">MAC Thunderbolt / Nativo</span>
+                    <span class="detail-val">00:E0:4C:68:06:9C</span>
                 </div>
                 <div class="detail-item">
-                    <span class="detail-label">IP Reservada</span>
-                    <span class="detail-val">192.168.68.58</span>
+                    <span class="detail-label">IP Asignada</span>
+                    <span class="detail-val">192.168.68.60 (LAN)</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Subnet Broadcast</span>
@@ -672,8 +677,12 @@ class WoLRequestHandler(BaseHTTPRequestHandler):
 
         client_ip = self.client_address[0]
         try:
-            sent = send_magic_packet(dev["mac"], dev.get("ip"))
-            msg = f"Disparo WoL a {dev['name']} ({dev['mac']}) [x{sent} pkts]"
+            macs_to_wake = [dev["mac"]] + dev.get("extra_macs", [])
+            total_sent = 0
+            for m in macs_to_wake:
+                sent = send_magic_packet(m, dev.get("ip"))
+                total_sent += sent
+            msg = f"Disparo WoL a {dev['name']} ({', '.join(macs_to_wake)}) [x{total_sent} pkts]"
             add_log(msg, "success")
 
             self.send_response(200)
@@ -685,7 +694,8 @@ class WoLRequestHandler(BaseHTTPRequestHandler):
                 "target": target,
                 "device": dev["name"],
                 "mac": dev["mac"],
-                "packets_sent": sent,
+                "macs": macs_to_wake,
+                "packets_sent": total_sent,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }).encode("utf-8"))
         except Exception as e:
